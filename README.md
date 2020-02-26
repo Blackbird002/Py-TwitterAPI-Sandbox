@@ -9,3 +9,6 @@ pip install tweepy
 pip install pandas
 pip install numpy
 ```
+
+## Tweepy API reference
+[tweepy.api Reference](http://docs.tweepy.org/en/latest/api.html#)

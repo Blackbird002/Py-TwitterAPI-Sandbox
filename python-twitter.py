@@ -6,8 +6,9 @@ from tweepy.streaming import StreamListener
 from tweepy import OAuthHandler
 from tweepy import Stream
 
-import numpy as np
 import pandas as pd
+import numpy as np
+import re
 
 ######################################################################################################################
 # Class TwitterAuthenticator
@@ -53,7 +54,7 @@ class TwitterStreamer():
 
     stream = Stream(auth, listener)
 
-    # This line filter Twitter Streams to capture data by the keywords: 
+    # This line filters Twitter Streams to capture data by the keywords: 
     stream.filter(track=hash_tag_list)
 
 ######################################################################################################################
@@ -65,7 +66,6 @@ class TwitterListener(StreamListener):
     self.fetched_tweets_filename = fetched_tweet_filename
 
   def on_data(self, data):
-    print("Type of data is: ", type(data))
     try:
       #Deserialize strin and create python object
       jsonTweets = json.loads(data)
@@ -120,42 +120,64 @@ class TwitterClient():
       friend_list.append(friend)
     return friend_list
 
+  #########################################################
+  # Function search_for_tweet
+  # - search query string of 500 characters maximum
+  #########################################################
+  def search_for_tweet(self, query_str, count):
+    #Check character count...
+    char_count = 0
+    for word in query_str:
+      for char in word:
+        char_count +=1
+    
+    if(char_count >= 500):
+      print("Exceeded Max character count in query!")
+      return False
+    else:
+      found_tweets = []
+      for tweet in Cursor(self.twitter_client.search, q=query_str, count=count).items(count):
+        found_tweets.append(tweet)
+      return found_tweets
+
 ######################################################################################################################
 # Class TweetAnalyzer
 # - Functionality for analyzig and categorizing from tweets
 ######################################################################################################################
 class TweetAnalyzer():
-  def tweets_to_data_frame(self, tweets):
-    df = pd.DataFrame(data=[tweet.text for tweet in tweets], columns=['Tweets'])
 
+  def clean_tweet(self, tweet):
+    return ' '.join(re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", tweet).split())
+
+  def tweets_to_data_frame(self, tweets):
+    df = pd.DataFrame(data=[tweet.text for tweet in tweets], columns=['tweets'])
     df['id'] = np.array([tweet.id for tweet in tweets])
-    df['len'] = np.array([len(tweet.text) for tweet in tweets])
-    df['data'] = np.array([tweet.created_at for tweet in tweets])
+    df['date'] = np.array([tweet.created_at for tweet in tweets])
     df['source'] = np.array([tweet.source for tweet in tweets])
     df['likes'] = np.array([tweet.favorite_count for tweet in tweets])
     df['retweets'] = np.array([tweet.retweet_count for tweet in tweets])
+    df['entities'] = np.array([tweet.entities for tweet in tweets])
     return df
 
+  def get_possible_media_urls(self, tweets):
+    for tweet in tweets:
+      if ("media" in tweet.entities):
+        for image in tweet.entities["media"]:
+            print(image["media_url"])
+
+#########################################################
+  # Function main
+#########################################################
+def main():
+  twitter_client = TwitterClient()
+  tweet_analyzer = TweetAnalyzer()
+
+  api = twitter_client.get_twitter_client_api()
+  string = ["#funny","#hilarious","#meme","joke"]
+
+  tweets = twitter_client.search_for_tweet(string, 100)
+  tweet_analyzer.get_possible_media_url(tweets)
+  
 
 if  __name__ == "__main__":
-
-  twitter_client = TwitterClient()
-  api = twitter_client.get_twitter_client_api()
-
-  tweet_analyzer = TweetAnalyzer()
-  tweets = api.user_timeline(screen_name="NASA",count=20)
-  df = tweet_analyzer.tweets_to_data_frame(tweets)
-  print(df.head(10))
-
-
-  '''
-  hash_tag_list = ["String"]
-  fetched_tweets_filename = "Tweets.json"
-
-  twitter_client = TwitterClient('NASA')
-  print(twitter_client.get_user_timeline_tweets(1))
-
-  
-  twitterStreamer = TwitterStreamer()
-  twitterStreamer.stream_tweets(fetched_tweets_filename, hash_tag_list)
-  '''
+  main()
